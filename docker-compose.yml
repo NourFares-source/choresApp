@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database Container
+  db:
+    image: postgres:15-alpine
+    container_name: chores_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: choresTracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Redis Cache & Queue Container
+  redis:
+    image: redis:7-alpine
+    container_name: chores_redis
+    ports:
+      - "6379:6379"
+
+  # 3. FastAPI Web Application Container
+  web:
+    build: .
+    container_name: chores_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:secretpassword@db:5432/choresTracker
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+
+  # 4. Arq Background Worker Container
+  worker:
+    build: .
+    container_name: chores_worker
+    command: arq app.worker.WorkerSettings
+    environment:
+      - DATABASE_URL=postgresql://postgres:secretpassword@db:5432/choresTracker
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:
